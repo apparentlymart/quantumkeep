@@ -44,7 +44,6 @@ class Repository(object):
         raw_items = []
         for item in items:
             raw_items.append("%s %s %s\t%s" % (item.mode, item.target_type, item.target_name, item.filename))
-        print repr(raw_items)
         raw_items.append('')
         return self._run("mktree", stdin="\n".join(raw_items)).rstrip()
 

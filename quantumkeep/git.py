@@ -37,6 +37,9 @@ class Repository(object):
     def parse_commitish(self, commitish):
         return self._run("rev-parse", commitish).rstrip()
 
+    def update_ref(self, ref_name, target):
+        self._run("update-ref", "--", ref_name, target)
+
     def put_blob(self, value):
         return self._run("hash-object", "-w", "--stdin", stdin=value).rstrip()
 

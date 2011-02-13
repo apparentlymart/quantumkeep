@@ -15,6 +15,10 @@ class Store(object):
     def create_object(self, dict, author, message=None):
         return self._create_object(dict, author, message=message)
 
+    def create_object_alias(self, alias, object):
+        ref_name = "refs/aliases/%s" % alias
+        self.repo.update_ref(ref_name, object.commit_name)
+
     def _create_object(self, new_dict, author, message=None, parent=None):
 
         if message is None:

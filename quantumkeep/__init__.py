@@ -12,6 +12,12 @@ class Store(object):
         commit = self.repo.get_commit(name)
         return Object._from_git_commit(self, name, commit)
 
+    def create_object(self, dict):
+        return self._create_object(dict)
+
+    def _create_object(self, dict, parent=None):
+        pass
+
 
 class Object(object):
 
@@ -34,6 +40,18 @@ class Object(object):
     def as_native_dict(self):
         dict = self._get_dict()
         return dict.as_native_dict()
+
+    def create_successor(self, dict):
+        return self.store._create_object(dict, self)
+
+    def get_predecessors(self):
+        parent_names = self.commit.parent_names
+        ret = []
+        for parent_name in parent_names:
+            ret.append(self.store.get_object(parent_name))
+        return ret
+
+    predecessors = property(get_predecessors)
 
     def __getitem__(self, key):
         dict = self._get_dict()

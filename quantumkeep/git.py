@@ -124,6 +124,9 @@ class TreeItem(object):
         self.target_name = target_name
         return self
 
+    def __repr__(self):
+        return "<TreeItem %s, %s, %s, %s>" % (self.mode, self.target_type, self.target_name, self.filename)
+
 
 class GitError(Exception):
 

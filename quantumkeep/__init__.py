@@ -15,7 +15,35 @@ class Store(object):
     def create_object(self, dict):
         return self._create_object(dict)
 
-    def _create_object(self, dict, parent=None):
+    def _create_object(self, new_dict, parent=None):
+
+        # First we need to recursively create all of the trees
+        # and blobs to represent our dictionary.
+        def tree_for_dict(new_dict):
+
+            new_tree = git.Tree()
+
+            for key in new_dict:
+                value = new_dict[value]
+                value_type = type(value)
+                if value_type == dict:
+                    subtree_name = tree_for_dict(value)
+                    # TODO: add a tree item
+                elif value_type == str:
+                    # TODO: create a blob for this value
+                    # TODO: add a blob item
+                    pass
+                elif value_type == Object:
+                    # TODO: add a commit item referring to the object's commit_name
+                    pass
+
+            # TODO: write the tree object into the git repo
+            # TODO: return the tree object's name
+
+        tree_name = tree_for_dict(new_dict)
+
+        # TODO: write out a commit to the git repo pointing at this tree
+        
         pass
 
 

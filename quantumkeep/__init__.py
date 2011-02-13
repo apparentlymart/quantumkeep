@@ -31,6 +31,10 @@ class Object(object):
 
         return self.dict
 
+    def as_native_dict(self):
+        dict = self._get_dict()
+        return dict.as_native_dict()
+
     def __getitem__(self, key):
         dict = self._get_dict()
         return dict[key]
@@ -41,7 +45,7 @@ class Object(object):
 
     def __repr__(self):
         dict = self._get_dict()
-        return "<qk Object %s, %r>" % (self.commit_name, dict)
+        return "<qk Object %s %r>" % (self.commit_name, self.as_native_dict())
 
 
 class Dict(object):
@@ -52,6 +56,19 @@ class Dict(object):
         self.store = store
         self.tree = tree
         return self
+
+    def as_native_dict(self):
+        ret = {}
+        for key in self.tree.items:
+            
+            value = self[key]
+            if value.__class__ is self.__class__:
+                # Recursively native-ize
+                value = value.as_native_dict()
+
+            ret[key] = value
+
+        return ret
 
     def __getitem__(self, key):
         item = self.tree.items[key]
@@ -72,8 +89,5 @@ class Dict(object):
         return len(self.tree.items)
 
     def __repr__(self):
-        disp_dict = {}
-        for key in self.tree.items:
-            disp_dict[key] = self[key]
-        return "<qk Dict %r>" % disp_dict
+        return "<qk Dict %r>" % self.as_native_dict()
 

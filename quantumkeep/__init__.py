@@ -49,8 +49,12 @@ class Store(object):
                     new_item.filename = key
                     items.append(new_item)
                 elif value_type == Object:
-                    # TODO: add a commit item referring to the object's commit_name
-                    pass
+                    new_item = git.TreeItem()
+                    new_item.mode = "160000"
+                    new_item.target_type = "commit"
+                    new_item.target_name = value.commit_name
+                    new_item.filename = key
+                    items.append(new_item)
                 else:
                     raise Exception("Can't store %r value %r", value_type, value)
 
@@ -148,7 +152,7 @@ class Dict(object):
             return Dict._from_git_tree(self.store, child_tree)
         if target_type == "commit":
             child_commit = self.store.repo.get_commit(target_name)
-            return Object._from_git_commit(self.store, child_commit)
+            return Object._from_git_commit(self.store, target_name, child_commit)
         else:
             raise Exception("Don't know how to deal with a "+target_type+" git object")
 

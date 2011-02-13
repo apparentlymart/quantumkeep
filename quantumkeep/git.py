@@ -48,6 +48,28 @@ class Repository(object):
         raw_items.append('')
         return self._run("mktree", stdin="\n".join(raw_items)).rstrip()
 
+    def put_commit(self, tree_name, message, parent_names, author_name, author_email, author_time=None, committer_name=None, committer_email=None, commit_time=None):
+
+        if committer_name is None:
+            committer_name = author_name
+            committer_email = author_email
+            commit_time = author_time
+        
+        env = {}
+        env["GIT_AUTHOR_NAME"] = author_name
+        env["GIT_AUTHOR_EMAIL"] = author_email
+        #env["GIT_AUTHOR_DATE"] = "0 +0000" # FIXME: Implement
+        env["GIT_COMMITTER_NAME"] = committer_name
+        env["GIT_COMMITTER_EMAIL"] = committer_email
+        #env["GIT_COMMITTER_DATE"] = "0 +0000" # FIXME: Implement
+
+        cmd = ["commit-tree", tree_name]
+        for parent_name in parent_names:
+            cmd.extend(("-p", parent_name))
+
+        return self._run(*cmd, stdin=message, env=env)
+
+
 class Commit(object):
 
     def __init__(self):

@@ -12,39 +12,60 @@ class Store(object):
         commit = self.repo.get_commit(name)
         return Object._from_git_commit(self, name, commit)
 
-    def create_object(self, dict):
-        return self._create_object(dict)
+    def create_object(self, dict, author, message=None):
+        return self._create_object(dict, author, message=message)
 
-    def _create_object(self, new_dict, parent=None):
+    def _create_object(self, new_dict, author, message=None, parent=None):
+
+        if message is None:
+            if parent is None:
+                message = "Create new object"
+            else:
+                message = "Create successor to %s" % parent.commit_name
 
         # First we need to recursively create all of the trees
         # and blobs to represent our dictionary.
         def tree_for_dict(new_dict):
 
-            new_tree = git.Tree()
+            items = []
 
             for key in new_dict:
-                value = new_dict[value]
+                value = new_dict[key]
                 value_type = type(value)
                 if value_type == dict:
                     subtree_name = tree_for_dict(value)
-                    # TODO: add a tree item
+                    new_item = git.TreeItem()
+                    new_item.mode = "040000"
+                    new_item.target_type = "tree"
+                    new_item.target_name = subtree_name
+                    new_item.filename = key
+                    items.append(new_item)
                 elif value_type == str:
-                    # TODO: create a blob for this value
-                    # TODO: add a blob item
-                    pass
+                    blob_name = self.repo.put_blob(value)
+                    new_item = git.TreeItem()
+                    new_item.mode = "100644"
+                    new_item.target_type = "blob"
+                    new_item.target_name = blob_name
+                    new_item.filename = key
+                    items.append(new_item)
                 elif value_type == Object:
                     # TODO: add a commit item referring to the object's commit_name
                     pass
+                else:
+                    raise Exception("Can't store %r value %r", value_type, value)
 
-            # TODO: write the tree object into the git repo
-            # TODO: return the tree object's name
+            return self.repo.put_tree(items)
 
         tree_name = tree_for_dict(new_dict)
-
-        # TODO: write out a commit to the git repo pointing at this tree
+        commit_name = self.repo.put_commit(
+            tree_name=tree_name,
+            message=message,
+            parent_names=[ parent.commit_name ] if parent is not None else [],
+            author_name=author.name,
+            author_email=author.email,
+        )
         
-        pass
+        return self.get_object(commit_name)
 
 
 class Object(object):
@@ -69,8 +90,8 @@ class Object(object):
         dict = self._get_dict()
         return dict.as_native_dict()
 
-    def create_successor(self, dict):
-        return self.store._create_object(dict, self)
+    def create_successor(self, dict, author, message=None):
+        return self.store._create_object(dict, author, parent=self, message=message)
 
     def get_predecessors(self):
         parent_names = self.commit.parent_names
@@ -136,4 +157,11 @@ class Dict(object):
 
     def __repr__(self):
         return "<qk Dict %r>" % self.as_native_dict()
+
+
+class Author:
+
+    def __init__(self, name, email):
+        self.name = name
+        self.email = email
 

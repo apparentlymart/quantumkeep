@@ -67,7 +67,7 @@ class Repository(object):
         for parent_name in parent_names:
             cmd.extend(("-p", parent_name))
 
-        return self._run(*cmd, stdin=message, env=env)
+        return self._run(*cmd, stdin=message, env=env).rstrip()
 
 
 class Commit(object):

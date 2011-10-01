@@ -37,8 +37,22 @@ class Repository(object):
     def parse_commitish(self, commitish):
         return self._run("rev-parse", commitish).rstrip()
 
-    def update_ref(self, ref_name, target):
-        self._run("update-ref", "--", ref_name, target)
+    def update_ref(self, ref_name, new_value, old_value=None):
+        if old_value is None:
+            old_value = "" # Check that ref isn't present at all
+        self._run("update-ref", "--", ref_name, new_value, old_value)
+
+    def force_update_ref(self, ref_name, new_value):
+        self._run("update-ref", "--", ref_name, new_value)
+
+    def iterate_refs(self):
+        # FIXME: It would be better to read the output line-by-line
+        # and yield, but this will do for now.
+        result = self._run("show-ref")
+        for line in result.split("\n"):
+            if line != "":
+                (commit_id, ref) = line.split(" ")
+                yield (commit_id, ref)
 
     def put_blob(self, value):
         return self._run("hash-object", "-w", "--stdin", stdin=value).rstrip()

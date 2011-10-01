@@ -12,11 +12,24 @@ a website or blog, or whatever else.
 
 quantumkeep has a really simple data model built around immutable dictionaries
 with keys that are strings and with values that are either arbitrary strings of
-bytes, nested dictionaries, or objects.
+bytes or nested dictionaries.
 
-An object is a construct that combines a dictionary with authorship and a pointer
-to the predecessor object. Objects are also immutable, but you can create a new
-object that is a successor of a previous object.
+An object version is a construct that combines a dictionary with authorship and a pointer
+to the predecessor object. Objects versions are also immutable, but you can create a new
+version that is a successor of a previous versions.
+
+An object is an association of a persistent identifier to an object version. Objects
+are mutable in that a particular identifier can be repointed at different object
+versions over time. In the normal case, an object is updated to point at a successor
+version of its current version, ensuring that no historical data is ever lost.
+
+A collection is a named bucket of objects. Each collection has a distinct
+object identifier namespace, and a particular object can only be in one collection.
+Therefore the collection name is effectively part of the object's identifier.
+
+A collection can have zero or more indexes defined. Each index is constructed
+using a registered Python function which is called for each object in the collection,
+taking the object's current version and returning a string value to record in the index.
 
 ## Short Tutorial ##
 
@@ -35,90 +48,70 @@ Now you can use this store fom quantumkeep.
 Note that although a quantumkeep store is a git repository, there are some specific
 conventions for data representation in the repository. Therefore using quantumkeep
 with a "normal" git repository containing source code may produce some surprising
-results and is best avoided unless you know what you're doing.
+results and is best avoided unless you know what you're doing. Likewise, you shouldn't
+try to use the normal git tools with your quantumkeep store, as you may corrupt it.
 
-Objects have authorship information, so we must prepare an Author object to represent
+Object versions have authorship information, so we must prepare an Author object to represent
 the author of the objects we will subsequently create.
 
     >>> author = qk.Author("Example Author", "author@example.com")
 
+### Selecting a collection ###
+
+All objects exist inside collections. A collection doesn't exist on disk until
+its first object is created, but we can get an object referencing it regardless
+of whether it exists:
+
+    >>> collection = store.get_collection("example")
+
+Collection names can consist only of letters, digits and underscores.
+
 ### Working with objects ###
 
 A new object is created from a dictionary. This dictionary must be a standard
-Python dict with a number of additional constraints. Its values can only be dict
-or str values or instances of qt.Object. Its keys can only be str values containing
-non-whitespace characters. Reference cycles, where one dictionary directly or
-indirectly contains itself, are not permitted.
+Python dict with a a number of additional constraints: its values can only be dict
+or str values, its keys can only be str values containing
+non-whitespace characters, and dictionary reference cycles are not permitted.
 
-    >>> object = store.create_object({
+    >>> object = collection.create_object({
     ...     "name": "Example Object",
     ... }, author)
 
 A qk object can be read as if it were a dictionary. However, it cannot be written
-to because qk objects are immutable.
+directly because creating a new version is an atomic operation that requires an
+explicit action.
 
     >>> object["name"]
     'Example Object'
 
-Each object has a unique identifier that is a hash of its on-disk representation.
+Each object has a unique identifier that is a type 4 uuid.
 We can see this identifier in an object's string representation:
 
     >>> object
-    <qk Object 038d20d23fcb69e8e9a32d09c929c6e8302aefe5 {'name': 'Example Object'}>
+    <qk Object example:d14150bec5e947e09f3957dc912da0bf {'name': 'Example Object'}>
 
 A stored object can be looked up later by its identifier:
 
-    >>> store.get_object("038d20d23fcb69e8e9a32d09c929c6e8302aefe5")
-    <qk Object 038d20d23fcb69e8e9a32d09c929c6e8302aefe5 {'name': 'Example Object'}>
+    >>> collection.get_object("d14150bec5e947e09f3957dc912da0bf")
+    <qk Object d14150bec5e947e09f3957dc912da0bf {'name': 'Example Object'}>
 
-Since objects are immutable we can't edit this object, but we can create a new
-object that becomes a successor of this object by passing in another dictionary:
+We can create a new version by passing in a replacement dictionary:
 
-    >>> new_object = object.create_successor({"name": "Modified Object"}, author)
+    >>> object.create_new_version({"name": "Modified Object"}, author)
 
-An object's dictionary can contain other dictionaries or references to other objects.
-However, the entire data structure in an object forms the content of the object,
-so the entire structure is immutable and any change to a sub-dictionary value,
-or referring to a successor of a given object, requires the creation of a successor
-object. Therefore in a heirarchy of objects starting from some root object,
-a change to the data structure will require a successor to be created not only
-of the leaf object but also all of its ancestors.
-
-A given object contains references to the objects from which it succeeds. Normally
+A given object version contains references to the versions from which it succeeds. Normally
 this is only one object, but when object merging is implemented in future this
 may become two or more objects.
 
-    >>> new_object["name"]
+    >>> object["name"]
     'Modified Object'
-    >>> new_object.predecessors[0]["name"]
+    >>> object.current_version.previous_versions[0]["name"]
     'Example Object'
 
-You can navigate from predecessor to predecessor until you reach the initial incarnation
-of the data. Initial objects created with store.create_object do not have any
-predecessors, signalling that they are the original incarnation:
+You can navigate from version to version until you reach the initial incarnation
+of the data. Initial objects created with collection.create_object do not have any
+previous versions, signalling that they are the original incarnation:
 
-    >>> new_object.predecessors[0].predecessors
+    >>> object.current_version.previous_versions[0].previous_versions
     []
-
-### Object Aliases ###
-
-Often an application will have one or more objects that serve as entry points into
-the data structures it needs. Since creating a successor to an object creates
-a new identifier by which that successor is referenced, aliases provide a convenient
-way to give a symbolic name to the latest successor of a particular line of objects.
-
-    >>> store.create_object_alias("example_obj", object)
-    >>> store.get_object_by_alias("example_obj")
-    <qk Object 038d20d23fcb69e8e9a32d09c929c6e8302aefe5 {'name': 'Example Object'}>
-
-Alias are mutable, so when a successor to this object is created the alias can
-be updated to refer to the new object:
-
-    >>> store.create_object_alias("example_obj", new_object
-    >>> store.get_object_by_alias("example_obj")
-    <qk Object ea5320e43d861c828a8463332b895923f88b8778 {'name': 'Modified Object'}>
-
-The alias namespace is heirarchical, using slashes as the namespace delimiter.
-Multiple applications sharing one datastore may wish to use this heirarchy
-to separate their namespaces.
 

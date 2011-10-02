@@ -2,12 +2,15 @@
 from quantumkeep import git
 import uuid
 import re
+import sqlite3
 
 
 class Store(object):
 
     def __init__(self, dir):
         self.repo = git.Repository(dir)
+        index_db_fn = dir + "/index.db"
+        self.index_db = sqlite3.connect(index_db_fn)
 
     def get_collection(self, name):
         return Collection(self, name)
@@ -107,11 +110,15 @@ class Collection(object):
     def __init__(self, store, name):
         self.store = store
         self.name = name
+        self.indices = {}
 
     def create_object(self, new_dict, author, message="Create new object"):
         first_version_id = self.store._create_object_version(new_dict, author, message)
         first_version = self.store._get_object_version(first_version_id)
         object_id = uuid.uuid4().hex
+        # We add the index entries first because the index code is resilient to
+        # having rows that don't actually point at objects yet.
+        self._add_version_to_indices(object_id, first_version)
         self.store._update_object(self.name, object_id, first_version)
         return Object._from_current_version(self, object_id, first_version)
 
@@ -121,6 +128,69 @@ class Collection(object):
 
     def iterate_all_objects(self):
         return self.store.iterate_all_objects(collection=self)
+
+    def add_index(self, name, func):
+        self.indices[name] = Index(self, name, func)
+
+    def index(self, name):
+        return self.indices[name]
+
+    def _add_version_to_indices(self, object_id, version):
+        for index in self.indices.itervalues():
+            index._add_version(object_id, version)
+
+    def _remove_version_from_indices(self, object_id, version):
+        for index in self.indices.itervalues():
+            index._remove_version(object_id, version)
+
+
+class Index(object):
+
+    def __init__(self, collection, name, func):
+        self.collection = collection
+        self.name = name
+        self.func = func
+        self.store = collection.store
+
+    def objects_matching_value(self, value):
+        c = self.store.index_db.cursor()
+        sql = "SELECT object_id, version_id FROM [%s] WHERE value = ? ORDER BY sort_key ASC" % self._table_name
+        c.execute(sql, (value,))
+        for (object_id, version_id) in c:
+            obj = self.collection.get_object(object_id)
+            # Need to check that the version id matches to make sure
+            # we didn't just encounter a stale index entry that hasn't
+            # been removed yet.
+            if obj.current_version.version_id == version_id:
+                yield obj
+
+    @property
+    def _table_name(self):
+        return "%s:%s" % (self.collection.name, self.name)
+
+    def _ensure_table_exists(self):
+        table_name = self._table_name
+        sql = "CREATE TABLE IF NOT EXISTS [%s] (object_id, version_id, value, sort_key, PRIMARY KEY (object_id, version_id, value, sort_key))" % table_name
+        self.store.index_db.execute(sql)
+        sql = "CREATE INDEX IF NOT EXISTS [%s:value] ON [%s] (value, sort_key)" % (table_name, table_name)
+        self.store.index_db.execute(sql)
+
+    def _add_version(self, object_id, version):
+        rows = self.func(version)
+        if type(rows[0]) is not tuple:
+            # Shorthand for just one row
+            rows = (rows,)
+
+        self._ensure_table_exists()
+        for row in rows:
+            sql = "INSERT INTO [%s] (object_id, version_id, value, sort_key) VALUES (?, ?, ?, ?)" % self._table_name
+            self.store.index_db.execute(sql, (object_id, version.version_id, row[0], row[1]))
+        self.store.index_db.commit()
+
+    def _remove_version(self, object_id, version):
+        sql = "DELETE FROM [%s] WHERE object_id = ? AND version_id = ?" % self._table_name
+        self.store.index_db.execute(sql, (object_id, version.version_id))
+        self.store.index_db.commit()
 
 
 class UpdateConflictError(Exception):
@@ -149,8 +219,20 @@ class Object(object):
     def create_new_version(self, new_dict, author, message="New version"):
         new_version_id = self.store._create_object_version(new_dict, author, message, parent=self.current_version)
         new_version = self.store._get_object_version(new_version_id)
-        self.store._update_object(self.collection.name, self.object_id, new_version, self.current_version)
+        # We add the new index entries first because the index query code
+        # will just ignore these extra rows until we succeed in _update_object below.
+        self.collection._add_version_to_indices(self.object_id, new_version)
+        try:
+            self.store._update_object(self.collection.name, self.object_id, new_version, self.current_version)
+        except UpdateConflictError:
+            # Clean up the index entries we added above. This is safe
+            # because we only ever move forward in history and so
+            # this same version id will never be valid again.
+            self.collection._remove_version_from_indices(self.object_id, new_version)
+            raise
+        old_version = self.current_version
         self.current_version = new_version
+        self.collection._remove_version_from_indices(self.object_id, old_version)
         return new_version
 
     def get_previous_versions(self):

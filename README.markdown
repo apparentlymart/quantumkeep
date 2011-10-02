@@ -122,7 +122,7 @@ engine. Indexes must be registered on a collection before any objects are create
 in that collection; any objects created when the index isn't present will not
 be included in the index.
 
-    >>> collection.add_index("status", lambda v : v["status"])
+    >>> collection.add_index("status", lambda v : (v["status"], ''))
     >>> collection.create_object({"status": "active", "name": "abc"}, author)
     >>> collection.create_object({"status": "inactive", "name": "123"}, author)
     >>> for obj in collection.index("status").objects_matching_value("active"):

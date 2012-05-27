@@ -64,3 +64,15 @@ class Tree(object):
             return self[key]
         except KeyError:
             return default
+
+    def __iter__(self):
+        live = self._live_children
+        for key in live:
+            yield key
+        for key in self._tree_items:
+            if key not in live:
+                yield key
+
+    def iteritems(self):
+        for key in self.__iter__():
+            yield (key, self[key])

@@ -35,3 +35,9 @@ class TestGit(unittest.TestCase):
         self.assertEqual(child_tree["test_subtree_blob"], "test blob 1")
         # A second call should return the same Tree instance
         self.assertEqual(id(child_tree), id(tree["test_tree_1"]))
+        keys = tuple(sorted(tree.__iter__()))
+        self.assertEqual(keys, (
+            'test_blob_1', 'test_blob_2', 'test_tree_1',
+        ))
+        for key, value in tree.iteritems():
+            self.assertEqual(value, tree[key])

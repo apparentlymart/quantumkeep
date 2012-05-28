@@ -20,7 +20,7 @@ from dulwich.objects import Tree as GitTree, Blob as GitBlob
 TREE_MODE = 0400000
 
 
-class Tree(object):
+class GitDict(object):
 
     def __init__(self, repo, tree_id=None):
         self.repo = repo
@@ -53,7 +53,7 @@ class Tree(object):
         except KeyError:
             tree_entry = self._tree_items[key]
             if tree_entry[0] & TREE_MODE:
-                child_tree = Tree(self.repo, tree_entry[1])
+                child_tree = GitDict(self.repo, tree_entry[1])
                 self._live_children[key] = child_tree
                 try:
                     del self._tree_items[key]
@@ -84,7 +84,7 @@ class Tree(object):
             yield (key, self[key])
 
     def make_subtree(self, key):
-        child_tree = Tree(self.repo)
+        child_tree = GitDict(self.repo)
         self._live_children[key] = child_tree
         try:
             del self._tree_items[key]
@@ -113,7 +113,7 @@ class Tree(object):
         # Now cook and add the live objects
 
         for key, value in self._live_children.items():
-            if type(value) is Tree:
+            if type(value) is GitDict:
                 child_tree_id = value.write_to_repo()
                 git_tree.add(key, TREE_MODE, child_tree_id)
             else:

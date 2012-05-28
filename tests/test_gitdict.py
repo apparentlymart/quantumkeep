@@ -2,14 +2,14 @@
 import unittest
 
 from dulwich.repo import MemoryRepo
-from quantumkeep.git import Tree, GitBlob, GitTree, TREE_MODE
+from quantumkeep.gitdict import GitDict, GitBlob, GitTree, TREE_MODE
 
 
 # An empty tree always hashes to the following
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
-class TestGit(unittest.TestCase):
+class TestGitDict(unittest.TestCase):
 
     def setUp(self):
         self.repo = MemoryRepo.init_bare([], {})
@@ -31,13 +31,13 @@ class TestGit(unittest.TestCase):
 
     def test_read(self):
         tree_id = self.make_tree_fixture()
-        tree = Tree(self.repo, tree_id)
+        tree = GitDict(self.repo, tree_id)
         self.assertEqual(tree["test_blob_1"], "test blob 1")
         self.assertEqual(tree["test_blob_2"], "test blob 2")
         child_tree = tree["test_tree_1"]
-        self.assertEqual(type(child_tree), Tree)
+        self.assertEqual(type(child_tree), GitDict)
         self.assertEqual(child_tree["test_subtree_blob"], "test blob 1")
-        # A second call should return the same Tree instance
+        # A second call should return the same GitDict instance
         self.assertEqual(id(child_tree), id(tree["test_tree_1"]))
         keys = tuple(sorted(tree.__iter__()))
         self.assertEqual(keys, (
@@ -48,15 +48,15 @@ class TestGit(unittest.TestCase):
 
     def test_make_subtree(self):
         tree_id = self.make_tree_fixture()
-        tree = Tree(self.repo, tree_id)
+        tree = GitDict(self.repo, tree_id)
         child_tree = tree.make_subtree("test_make_subtree")
         child_child_tree = child_tree.make_subtree("another_subtree")
         new_tree_id = tree.write_to_repo()
         self.assertEqual(
-            type(tree["test_make_subtree"]), Tree
+            type(tree["test_make_subtree"]), GitDict
         )
         self.assertEqual(
-            type(tree["test_make_subtree"]["another_subtree"]), Tree
+            type(tree["test_make_subtree"]["another_subtree"]), GitDict
         )
         child_git_tree = self.repo[new_tree_id]
         child_tree_mode, child_tree_id = child_git_tree["test_make_subtree"]
@@ -66,7 +66,7 @@ class TestGit(unittest.TestCase):
 
     def test_write_to_repo(self):
         tree_id = self.make_tree_fixture()
-        tree = Tree(self.repo, tree_id)
+        tree = GitDict(self.repo, tree_id)
 
         # write_to_repo with no changes yields the same tree id
         self.assertEqual(tree_id, tree.write_to_repo())

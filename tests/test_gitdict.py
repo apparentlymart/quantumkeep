@@ -31,32 +31,32 @@ class TestGitDict(unittest.TestCase):
 
     def test_read(self):
         tree_id = self.make_tree_fixture()
-        tree = GitDict(self.repo, tree_id)
-        self.assertEqual(tree["test_blob_1"], "test blob 1")
-        self.assertEqual(tree["test_blob_2"], "test blob 2")
-        child_tree = tree["test_tree_1"]
-        self.assertEqual(type(child_tree), GitDict)
-        self.assertEqual(child_tree["test_subtree_blob"], "test blob 1")
+        gitdict = GitDict(self.repo, tree_id)
+        self.assertEqual(gitdict["test_blob_1"], "test blob 1")
+        self.assertEqual(gitdict["test_blob_2"], "test blob 2")
+        child_gitdict = gitdict["test_tree_1"]
+        self.assertEqual(type(child_gitdict), GitDict)
+        self.assertEqual(child_gitdict["test_subtree_blob"], "test blob 1")
         # A second call should return the same GitDict instance
-        self.assertEqual(id(child_tree), id(tree["test_tree_1"]))
-        keys = tuple(sorted(tree.__iter__()))
+        self.assertEqual(id(child_gitdict), id(gitdict["test_tree_1"]))
+        keys = tuple(sorted(gitdict.__iter__()))
         self.assertEqual(keys, (
             'test_blob_1', 'test_blob_2', 'test_tree_1',
         ))
-        for key, value in tree.iteritems():
-            self.assertEqual(value, tree[key])
+        for key, value in gitdict.iteritems():
+            self.assertEqual(value, gitdict[key])
 
     def test_make_subtree(self):
         tree_id = self.make_tree_fixture()
-        tree = GitDict(self.repo, tree_id)
-        child_tree = tree.make_subtree("test_make_subtree")
-        child_child_tree = child_tree.make_subtree("another_subtree")
-        new_tree_id = tree.write_to_repo()
+        gitdict = GitDict(self.repo, tree_id)
+        child_gitdict = gitdict.make_subtree("test_make_subtree")
+        child_child_gitdict = child_gitdict.make_subtree("another_subtree")
+        new_tree_id = gitdict.write_to_repo()
         self.assertEqual(
-            type(tree["test_make_subtree"]), GitDict
+            type(gitdict["test_make_subtree"]), GitDict
         )
         self.assertEqual(
-            type(tree["test_make_subtree"]["another_subtree"]), GitDict
+            type(gitdict["test_make_subtree"]["another_subtree"]), GitDict
         )
         child_git_tree = self.repo[new_tree_id]
         child_tree_mode, child_tree_id = child_git_tree["test_make_subtree"]
@@ -65,19 +65,19 @@ class TestGitDict(unittest.TestCase):
         self.assertEqual(child_child_tree_id, EMPTY_TREE)
 
     def test_blob(self):
-        tree = GitDict(self.repo)
-        tree["blob1"] = "blob1"
-        tree["blob2"] = "blob2"
-        self.assertEqual(tuple(sorted(tree)), ("blob1", "blob2"))
-        tree_id = tree.write_to_repo()
+        gitdict = GitDict(self.repo)
+        gitdict["blob1"] = "blob1"
+        gitdict["blob2"] = "blob2"
+        self.assertEqual(tuple(sorted(gitdict)), ("blob1", "blob2"))
+        tree_id = gitdict.write_to_repo()
         git_tree = self.repo[tree_id]
         self.assertEqual(tuple(sorted(git_tree)), ("blob1", "blob2"))
         blob2_id = git_tree["blob2"][1]
         git_blob2 = self.repo[blob2_id]
         self.assertEqual(git_blob2.as_raw_string(), "blob2")
 
-        tree["blob2"] = "blob2.2"
-        tree_id = tree.write_to_repo()
+        gitdict["blob2"] = "blob2.2"
+        tree_id = gitdict.write_to_repo()
         git_tree = self.repo[tree_id]
         blob2_id = git_tree["blob2"][1]
         git_blob2 = self.repo[blob2_id]
@@ -85,20 +85,20 @@ class TestGitDict(unittest.TestCase):
 
     def test_write_to_repo(self):
         tree_id = self.make_tree_fixture()
-        tree = GitDict(self.repo, tree_id)
+        gitdict = GitDict(self.repo, tree_id)
 
         # write_to_repo with no changes yields the same tree id
-        self.assertEqual(tree_id, tree.write_to_repo())
+        self.assertEqual(tree_id, gitdict.write_to_repo())
 
-        child_tree = tree.make_subtree("blah")
+        child_gitdict = gitdict.make_subtree("blah")
 
-        new_tree_id = tree.write_to_repo()
+        new_tree_id = gitdict.write_to_repo()
 
         # new_tree_id should be different
         self.assertNotEqual(new_tree_id, tree_id)
 
         # write_to_repo with no changes yields the same tree id again
-        self.assertEqual(new_tree_id, tree.write_to_repo())
+        self.assertEqual(new_tree_id, gitdict.write_to_repo())
 
         # New tree should be in the repo
         new_git_tree = self.repo[new_tree_id]

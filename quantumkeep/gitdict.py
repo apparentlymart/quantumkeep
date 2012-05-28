@@ -82,6 +82,12 @@ class GitDict(object):
         else:
             raise TypeError("GitDict value (for %r) must be a byte string or a native dict" % key)
 
+    def __delitem__(self, key):
+        try:
+            del self._tree_items[key]
+        except KeyError:
+            del self._live_children[key]
+
     def get(self, key, default=None):
         try:
             return self[key]

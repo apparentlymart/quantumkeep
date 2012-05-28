@@ -15,6 +15,7 @@ commits and tags to be handled by the caller where needed.
 import weakref
 
 from dulwich.objects import Tree as GitTree, Blob as GitBlob
+from dulwich.diff_tree import tree_changes_for_merge, tree_changes
 
 
 TREE_MODE = 0400000
@@ -155,3 +156,36 @@ class GitDict(object):
             else:
                 ret[key] = value
         return ret
+
+    def __repr__(self):
+        return "<GitDict %r>" % self.as_native_dict()
+
+
+def find_changed_leaves(repo, old_tree_id, new_tree_id, prefix=(), max_depth=None):
+    if False: yield None
+    store = repo.object_store
+    changes = tree_changes(store, old_tree_id, new_tree_id)
+    for change in changes:
+        both_are_trees = (
+            (change.old.mode is not None) and
+            (change.new.mode is not None) and
+            (change.old.mode & TREE_MODE) and
+            (change.new.mode & TREE_MODE)
+        )
+        can_go_deeper = max_depth is None or max_depth > 1
+        path = prefix + (change.new.path if change.new.path is not None else change.old.path,)
+        if both_are_trees and can_go_deeper:
+            child_changes = find_changed_leaves(
+                repo,
+                change.old.sha,
+                change.new.sha,
+                path,
+                max_depth - 1 if max_depth is not None else None,
+            )
+            for child_change in child_changes:
+                yield child_change
+        else:
+            yield (
+                path,
+                change.type,
+            )

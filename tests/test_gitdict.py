@@ -2,7 +2,13 @@
 import unittest
 
 from dulwich.repo import MemoryRepo
-from quantumkeep.gitdict import GitDict, GitBlob, GitTree, TREE_MODE
+from quantumkeep.gitdict import (
+    GitDict,
+    GitBlob,
+    GitTree,
+    TREE_MODE,
+    find_changed_leaves,
+)
 
 
 # An empty tree always hashes to the following
@@ -151,3 +157,58 @@ class TestGitDict(unittest.TestCase):
 
         # The empty tree should also be in the repo
         empty_tree = self.repo[EMPTY_TREE]
+
+    def test_find_changed_leaves(self):
+        gitdict = GitDict(self.repo)
+        gitdict["abc"] = "123"
+        gitdict["def"] = "456"
+        gitdict["qwe"] = {}
+        gitdict["rty"] = {"a":"b"}
+
+        base_tree_id = gitdict.write_to_repo()
+
+        gitdict["def"] = "654"
+        gitdict["ghi"] = "hi"
+        gitdict["rty"]["a"] = "c"
+        gitdict["qwe"]["g"] = "3"
+        gitdict["abc"] = {}
+
+        new_tree_id_1 = gitdict.write_to_repo()
+
+        changes = find_changed_leaves(self.repo, base_tree_id, new_tree_id_1)
+        self.assertEqual(
+            list(sorted(changes)),
+            [
+                (('abc',), 'modify'),
+                (('def',), 'modify'),
+                (('ghi',), 'add'),
+                (('qwe', 'g'), 'add'),
+                (('rty', 'a'), 'modify')
+            ]
+        )
+
+        changes = find_changed_leaves(self.repo, base_tree_id, new_tree_id_1, max_depth=1)
+        self.assertEqual(
+            list(sorted(changes)),
+            [
+                (('abc',), 'modify'),
+                (('def',), 'modify'),
+                (('ghi',), 'add'),
+                (('qwe',), 'modify'),
+                (('rty',), 'modify')
+            ]
+        )
+
+        del gitdict["rty"]["a"]
+        del gitdict["abc"]
+        del gitdict["def"]
+
+        new_tree_id_2 = gitdict.write_to_repo()
+        changes = find_changed_leaves(self.repo, new_tree_id_1, new_tree_id_2, max_depth=1)
+        self.assertEqual(
+            list(sorted(changes)),
+            [
+                (('abc',), 'delete'),
+                (('def',), 'delete'),
+            ]
+        )

@@ -64,6 +64,25 @@ class TestGitDict(unittest.TestCase):
         child_child_tree_mode, child_child_tree_id = child_child_git_tree["another_subtree"]
         self.assertEqual(child_child_tree_id, EMPTY_TREE)
 
+    def test_blob(self):
+        tree = GitDict(self.repo)
+        tree["blob1"] = "blob1"
+        tree["blob2"] = "blob2"
+        self.assertEqual(tuple(sorted(tree)), ("blob1", "blob2"))
+        tree_id = tree.write_to_repo()
+        git_tree = self.repo[tree_id]
+        self.assertEqual(tuple(sorted(git_tree)), ("blob1", "blob2"))
+        blob2_id = git_tree["blob2"][1]
+        git_blob2 = self.repo[blob2_id]
+        self.assertEqual(git_blob2.as_raw_string(), "blob2")
+
+        tree["blob2"] = "blob2.2"
+        tree_id = tree.write_to_repo()
+        git_tree = self.repo[tree_id]
+        blob2_id = git_tree["blob2"][1]
+        git_blob2 = self.repo[blob2_id]
+        self.assertEqual(git_blob2.as_raw_string(), "blob2.2")
+
     def test_write_to_repo(self):
         tree_id = self.make_tree_fixture()
         tree = GitDict(self.repo, tree_id)

@@ -66,6 +66,15 @@ class GitDict(object):
                     raise Exception("Expected blob but got %r" % blob)
                 return blob.as_raw_string()
 
+    def __setitem__(self, key, value):
+        if type(value) is not str:
+            raise TypeError("GitDict value must be a byte string")
+        self._live_children[key] = value
+        try:
+            del self._tree_items[key]
+        except KeyError:
+            pass
+
     def get(self, key, default=None):
         try:
             return self[key]

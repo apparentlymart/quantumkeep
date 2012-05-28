@@ -7,13 +7,27 @@ __all__ = ["Schema", "Attribute", "PrimitiveType"]
 
 class Attribute(object):
 
-    def __init__(self, key, type, caption=None):
+    def __init__(self, key, type, caption=None, differ=None):
         self.key = key
         self.type = type
         if caption is not None:
             self.caption = caption
         else:
             self.caption = key
+        if differ is not None:
+            if differ.can_derive_for_type(type):
+                self.differ = differ
+            else:
+                raise ValueError(
+                    "Differ %s is not compatible with attribute '%s' of type %s" % (
+                        differ.key,
+                        key,
+                        type.display_name,
+                    )
+                )
+        else:
+            from quantumkeep.diff import value_diff
+            self.differ = value_diff.replace
 
 
 class Type(object):

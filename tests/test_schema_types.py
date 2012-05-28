@@ -2,6 +2,7 @@
 import unittest
 
 from quantumkeep.schema import Schema, Attribute, PrimitiveType
+from quantumkeep.diff import value_diff, BaseDiff
 
 
 class TestSchemaTypes(unittest.TestCase):
@@ -9,9 +10,11 @@ class TestSchemaTypes(unittest.TestCase):
     def setUp(self):
         schema = Schema()
         schema.add_object_type("Article", (
-            Attribute("title", PrimitiveType.string, "Title"),
+            Attribute("title", PrimitiveType.string,
+                      caption="Title"),
             Attribute("body", PrimitiveType.string),
-            Attribute("some_integer", PrimitiveType.integer),
+            Attribute("some_integer", PrimitiveType.integer,
+                      differ=value_diff.numeric_sum),
             Attribute("some_boolean", PrimitiveType.boolean),
             Attribute("some_bytes", PrimitiveType.bytes),
             Attribute("some_float", PrimitiveType.float),
@@ -59,6 +62,27 @@ class TestSchemaTypes(unittest.TestCase):
                 PrimitiveType.float,
                 PrimitiveType.string
             ],
+        )
+        self.assertEqual(
+            [x.differ for x in article_type.attributes],
+            [
+                value_diff.replace,
+                value_diff.replace,
+                value_diff.numeric_sum,
+                value_diff.replace,
+                value_diff.replace,
+                value_diff.replace,
+                value_diff.replace,
+            ],
+        )
+        # Test trying to apply an incompatible differ
+        base_diff = BaseDiff(None, None, None)
+        self.assertRaises(
+            ValueError,
+            lambda : Attribute(
+                "foo", PrimitiveType.string,
+                differ=base_diff,
+            ),
         )
 
     def test_primitive_types(self):

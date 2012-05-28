@@ -49,8 +49,8 @@ class TestGitDict(unittest.TestCase):
     def test_make_subtree(self):
         tree_id = self.make_tree_fixture()
         gitdict = GitDict(self.repo, tree_id)
-        child_gitdict = gitdict.make_subtree("test_make_subtree")
-        child_child_gitdict = child_gitdict.make_subtree("another_subtree")
+        child_gitdict = gitdict.make_subdict("test_make_subtree")
+        child_child_gitdict = child_gitdict.make_subdict("another_subtree")
         new_tree_id = gitdict.write_to_repo()
         self.assertEqual(
             type(gitdict["test_make_subtree"]), GitDict
@@ -64,7 +64,51 @@ class TestGitDict(unittest.TestCase):
         child_child_tree_mode, child_child_tree_id = child_child_git_tree["another_subtree"]
         self.assertEqual(child_child_tree_id, EMPTY_TREE)
 
-    def test_blob(self):
+    def test_assign_dict(self):
+        gitdict = GitDict(self.repo)
+
+        test_dict = {
+            "foo": "bar",
+            "baz": {
+                "cheese": "pizza",
+                "empty": {},
+            },
+        }
+
+        gitdict["test"] = test_dict
+        self.assertEqual({"test":test_dict}, gitdict.as_native_dict())
+
+        tree_id = gitdict.write_to_repo()
+        new_gitdict = GitDict(self.repo, tree_id)
+        self.assertEqual(new_gitdict.as_native_dict(), {"test":test_dict})
+
+        test_dict = {}
+        gitdict["test"] = {}
+        self.assertEqual(gitdict.as_native_dict(), {"test":test_dict})
+        self.assertNotEqual(new_gitdict.as_native_dict(), {"test":test_dict})
+
+    def test_assign_invalid(self):
+        gitdict = GitDict(self.repo)
+
+        def assertAssignRaises(v):
+            try:
+                gitdict["a"] = v
+            except TypeError:
+                pass
+            else:
+                self.fail("Assigning %r didn't raise TypeError" % v)
+
+        assertAssignRaises(1)
+        assertAssignRaises(True)
+        assertAssignRaises(u"hi")
+        assertAssignRaises(GitDict(self.repo))
+        assertAssignRaises([1,2])
+        assertAssignRaises((1,2))
+        assertAssignRaises([])
+        assertAssignRaises(tuple([]))
+        assertAssignRaises({"b":1})
+
+    def test_assign_blob(self):
         gitdict = GitDict(self.repo)
         gitdict["blob1"] = "blob1"
         gitdict["blob2"] = "blob2"
@@ -90,7 +134,7 @@ class TestGitDict(unittest.TestCase):
         # write_to_repo with no changes yields the same tree id
         self.assertEqual(tree_id, gitdict.write_to_repo())
 
-        child_gitdict = gitdict.make_subtree("blah")
+        child_gitdict = gitdict.make_subdict("blah")
 
         new_tree_id = gitdict.write_to_repo()
 

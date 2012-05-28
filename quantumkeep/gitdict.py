@@ -67,13 +67,20 @@ class GitDict(object):
                 return blob.as_raw_string()
 
     def __setitem__(self, key, value):
-        if type(value) is not str:
-            raise TypeError("GitDict value must be a byte string")
-        self._live_children[key] = value
-        try:
-            del self._tree_items[key]
-        except KeyError:
-            pass
+        value_type = type(value)
+        if value_type is str:
+            self._live_children[key] = value
+
+            try:
+                del self._tree_items[key]
+            except KeyError:
+                pass
+        elif value_type is dict:
+            child_gitdict = self.make_subdict(key)
+            for child_key, child_value in value.iteritems():
+                child_gitdict[child_key] = value[child_key]
+        else:
+            raise TypeError("GitDict value (for %r) must be a byte string or a native dict" % key)
 
     def get(self, key, default=None):
         try:
@@ -82,24 +89,23 @@ class GitDict(object):
             return default
 
     def __iter__(self):
-        live = self._live_children
-        for key in live:
+        for key in tuple(self._live_children):
             yield key
-        for key in self._tree_items:
+        for key in tuple(self._tree_items):
             yield key
 
     def iteritems(self):
         for key in self.__iter__():
             yield (key, self[key])
 
-    def make_subtree(self, key):
-        child_tree = GitDict(self.repo)
-        self._live_children[key] = child_tree
+    def make_subdict(self, key):
+        child_gitdict = GitDict(self.repo)
+        self._live_children[key] = child_gitdict
         try:
             del self._tree_items[key]
         except KeyError:
             pass
-        return child_tree
+        return child_gitdict
 
     def write_to_repo(self):
         """
@@ -134,3 +140,12 @@ class GitDict(object):
 
         self._base_tree_id = git_tree.id
         return self._base_tree_id
+
+    def as_native_dict(self):
+        ret = {}
+        for key, value in self.iteritems():
+            if type(value) is GitDict:
+                ret[key] = value.as_native_dict()
+            else:
+                ret[key] = value
+        return ret

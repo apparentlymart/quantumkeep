@@ -179,23 +179,11 @@ class TestGitDict(unittest.TestCase):
         self.assertEqual(
             list(sorted(changes)),
             [
-                (('abc',), 'modify'),
+                (('abc',), 'delete'),
                 (('def',), 'modify'),
                 (('ghi',), 'add'),
                 (('qwe', 'g'), 'add'),
                 (('rty', 'a'), 'modify')
-            ]
-        )
-
-        changes = find_changed_leaves(self.repo, base_tree_id, new_tree_id_1, max_depth=1)
-        self.assertEqual(
-            list(sorted(changes)),
-            [
-                (('abc',), 'modify'),
-                (('def',), 'modify'),
-                (('ghi',), 'add'),
-                (('qwe',), 'modify'),
-                (('rty',), 'modify')
             ]
         )
 
@@ -204,11 +192,10 @@ class TestGitDict(unittest.TestCase):
         del gitdict["def"]
 
         new_tree_id_2 = gitdict.write_to_repo()
-        changes = find_changed_leaves(self.repo, new_tree_id_1, new_tree_id_2, max_depth=1)
+        changes = find_changed_leaves(self.repo, new_tree_id_1, new_tree_id_2)
         self.assertEqual(
             list(sorted(changes)),
             [
-                (('abc',), 'delete'),
                 (('def',), 'delete'),
             ]
         )

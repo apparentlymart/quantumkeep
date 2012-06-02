@@ -145,15 +145,68 @@ class MapType(Type):
 
 
 class Container(object):
-    pass
 
+    def __init__(self, name, item_type, item_key_attrs):
+        self.name = name
+        self.item_type = item_type
+        item_type_attrs = {}
+        for attr in item_type.attributes:
+            item_type_attrs[attr.key] = attr
+        self.item_key_attrs = [
+            item_type_attrs[x] for x in item_key_attrs
+        ]
+
+    def path_chunks_for_item(self, item):
+        ret = []
+        for attr in self.item_key_attrs:
+            attr_key = attr.key
+            attr_type = attr.type
+            value = getattr(item, attr_key, None)
+            if value is None:
+                raise ValueError(
+                    "Item has no value for key attribute " + attr_key
+                )
+
+            # TEMP: For now, we just make a chunk for each item
+            # in the key. In the longer term this should do something
+            # more clever, like split up large strings into multiple
+            # levels of heirarchy, or maybe create a btree out of
+            # git trees.
+
+            from quantumkeep.marshall import transform_in
+            ret.append(str(transform_in(attr_type, value)))
+        return ret
+
+    def path_chunks_for_key(self, **kwargs):
+        ret = []
+        for attr in self.item_key_attrs:
+            attr_key = attr.key
+            attr_type = attr.type
+            value = kwargs.get(attr_key, None)
+            if value is None:
+                raise ValueError(
+                    "No value passed for key parameter " + attr_key
+                )
+            from quantumkeep.marshall import transform_in
+            ret.append(str(transform_in(attr_type, value)))
+        return ret
 
 class Schema(object):
 
     def __init__(self):
         self._object_types = {}
+        self._containers = {}
         self._map_types = weakdict()
         self._list_types = weakdict()
+
+    def add_container(self, name, item_type, item_key_attrs):
+        if name in self._containers:
+            raise KeyError("Schema already has a container called %s" % name)
+        else:
+            self._containers[name] = Container(name, item_type, item_key_attrs)
+
+    def container(self, name):
+        return self._containers[name]
 
     def add_object_type(self, name, attributes):
         if name in self._object_types:

@@ -130,8 +130,49 @@ class TestMarshall(unittest.TestCase):
         ot = self.object_type
         self.assertBoth(ot, None, None)
 
-        # TODO: test the rest once we actually have the ability to get
-        # a class representing an object type.
+        instance = transform_out(ot, {})
+        cls = self.object_type.python_class
+        self.assertTrue(type(instance) is cls)
+        self.assertEqual(instance.some_integer, None)
+
+        instance = transform_out(ot, {
+            "some_integer": "5",
+            "some_string": "\xe2\x9c\x84",
+        })
+        self.assertEqual(instance.some_integer, 5)
+        self.assertEqual(type(instance.some_integer), int)
+        self.assertEqual(instance.some_string, u"\u2704")
+        self.assertEqual(type(instance.some_string), unicode)
+
+        instance.some_boolean = 1
+        instance.some_float = 4
+
+        self.assertEqual(type(instance.some_boolean), int)
+        def try_del():
+            del instance.some_float
+        self.assertRaises(TypeError, try_del)
+
+        d = transform_in(ot, instance)
+        self.assertEqual(type(d), dict)
+        self.assertEqual(d["some_boolean"], True)
+        self.assertEqual(type(d["some_boolean"]), bool)
+        self.assertEqual(d["some_float"], 4.0)
+        self.assertEqual(type(d["some_float"]), float)
+
+        instance = transform_out(ot, d)
+        self.assertEqual(type(instance.some_boolean), bool)
+
+        class SomeRandomClass(object):
+            pass
+
+        class SomeSubclass(cls):
+            pass
+
+        self.assertTIRaises(ot, SomeSubclass, TypeError)
+        self.assertTIRaises(ot, SomeRandomClass, TypeError)
+        self.assertTIRaises(ot, {}, TypeError)
+        self.assertTIRaises(ot, 4, TypeError)
+        self.assertTORaises(ot, instance, TypeError)
 
     def test_transform_list_types(self):
         lt = self.schema.list_type(PrimitiveType.string)

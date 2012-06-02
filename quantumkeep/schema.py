@@ -28,6 +28,35 @@ class Attribute(object):
         else:
             from quantumkeep.diff import value_diff
             self.differ = value_diff.replace
+        self._python_accessor_descriptor = None
+
+    @property
+    def python_accessor_descriptor(self):
+        if self._python_accessor_descriptor is None:
+            key = self.key
+
+            # TODO: Maybe make these descriptors do some write-time
+            # type checking, but for now they're just there to ensure
+            # that the expected attrs are present on instances
+            # even if they aren't set to anything yet.
+
+            class Descriptor(object):
+                def __get__(self, instance, owner):
+                    return instance.__dict__.get(key, None)
+
+                def __set__(self, instance, value):
+                    instance.__dict__[key] = value
+
+                def __delete__(self, instance):
+                    raise TypeError(
+                        "Can't delete attribute of class for object type"
+                    )
+
+            Descriptor.__name__ = key
+
+            self._python_accessor_descriptor = Descriptor()
+
+        return self._python_accessor_descriptor
 
 
 class Type(object):
@@ -46,10 +75,29 @@ class ObjectType(Type):
     def __init__(self, name, attributes):
         self.name = name
         self.attributes = tuple(attributes)
+        self._python_class = None
 
     @property
     def display_name(self):
         return self.name if self.name is not None else "(anon)"
+
+    @property
+    def python_class(self):
+        if self._python_class is None:
+            class ObjectTypeStub(object):
+                pass
+
+            ObjectTypeStub.__name__ = self.name
+
+            for attr in self.attributes:
+                setattr(
+                    ObjectTypeStub, attr.key,
+                    attr.python_accessor_descriptor,
+                )
+
+            self._python_class = ObjectTypeStub
+
+        return self._python_class
 
 
 class PrimitiveType(Type):

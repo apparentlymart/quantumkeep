@@ -191,6 +191,10 @@ class Container(object):
             ret.append(str(transform_in(attr_type, value)))
         return ret
 
+
+_schemas_by_tree_id = weakdict()
+
+
 class Schema(object):
 
     def __init__(self):
@@ -198,6 +202,22 @@ class Schema(object):
         self._containers = {}
         self._map_types = weakdict()
         self._list_types = weakdict()
+
+    @classmethod
+    def from_schema_dict(cls, schema_dict):
+        tree_id = None
+        if getattr(schema_dict, "write_to_repo", None):
+            # This looks like a gitdict, so let's see if we already
+            # have a schema cached for the tree it represents.
+            tree_id = schema_dict.write_to_repo()
+            cached_schema = _schemas_by_tree_id.get(tree_id, None)
+            if cached_schema is not None:
+                return cached_schema
+
+        schema = _schema_from_dict(schema_dict)
+        if tree_id is not None:
+            _schemas_by_tree_id[tree_id] = schema
+        return schema
 
     def add_container(self, name, item_type, item_key_attrs):
         if name in self._containers:
@@ -232,3 +252,80 @@ class Schema(object):
 
     def primitive_type(self, name):
         return PrimitiveType.get_by_name(name)
+
+
+def _type_from_ref(schema, ref):
+    type_type = ref[0]
+    if type_type == "primitive":
+        return schema.primitive_type(ref[1])
+    if type_type == "object":
+        return schema.object_type(ref[1])
+    if type_type == "list":
+        item_type = _type_from_ref(ref[1])
+        return schema.list_type(item_type)
+    if type_type == "map":
+        key_type = _type_from_ref(ref[1])
+        value_type = _type_from_ref(ref[2])
+        return schema.map_type(key_type, value_type)
+    raise ValueError("Can't understand type ref %r" % ref)
+
+
+def _schema_from_dict(dict):
+    object_types_dict = dict["object_types"]
+    containers_dict = dict["containers"]
+
+    # FIXME: This should really be written in terms of a meta-schema
+    # that uses the same marshalling machinery as the real schemas,
+    # but this will do for now while we bootstrap.
+    from msgpack import unpackb
+
+    schema = Schema()
+
+    # First create skeleton object type objects so we can
+    # be sure we have an instance for each one when we come
+    # to build the attributes which may themselves reference
+    # other object types.
+
+    for type_name, type_packed in object_types_dict.iteritems():
+        schema.add_object_type(type_name, ())
+
+    # Now we can fill in their attributes knowing that we'll
+    # be able to resolve all attribute types.
+    from quantumkeep.diff import value_diff
+
+    for type_name, type_packed in object_types_dict.iteritems():
+        object_type = schema.object_type(type_name)
+        type_dict = unpackb(type_packed)
+        attr_dicts = type_dict.get("attributes", [])
+
+        attributes = []
+        for attr_dict in attr_dicts:
+            key = attr_dict["key"]
+            caption = attr_dict.get("caption", None)
+            differ_name = attr_dict.get("differ", None)
+            if differ_name is not None:
+                differ = value_diff.get_by_name(differ_name)
+            else:
+                differ = None
+            type_ref = attr_dict["type"]
+            type_type = type_ref[0]
+            attr_type = _type_from_ref(schema, type_ref)
+            attribute = Attribute(key, attr_type, caption, differ)
+            attributes.append(attribute)
+
+        object_type.attributes = tuple(attributes)
+
+    # The containers refer to attributes on their object types to form
+    # their storage keys, so the following needs to happen after the
+    # attributes are present.
+
+    for container_name, container_packed in containers_dict.iteritems():
+        container_dict = unpackb(container_packed)
+        item_type_name = container_dict["item_type"]
+        item_key_attrs = container_dict["item_key_attrs"]
+        item_type = schema.object_type(item_type_name)
+        schema.add_container(container_name, item_type, item_key_attrs)
+
+    return schema
+
+

@@ -19,6 +19,7 @@ from dulwich.diff_tree import tree_changes_for_merge, tree_changes
 
 
 TREE_MODE = 0o40000
+BLOB_MODE = 0o100644
 
 
 class GitDict(object):
@@ -141,7 +142,7 @@ class GitDict(object):
             else:
                 git_blob = GitBlob.from_string(value)
                 self.repo.object_store.add_object(git_blob)
-                git_tree.add(key, 0, git_blob.id)
+                git_tree.add(key, BLOB_MODE, git_blob.id)
 
         self.repo.object_store.add_object(git_tree)
 

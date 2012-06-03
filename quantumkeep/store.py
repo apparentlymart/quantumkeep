@@ -2,6 +2,8 @@
 from dulwich.repo import Repo, MemoryRepo
 from dulwich.client import get_transport_and_path
 
+from quantumkeep.versioning import Head, Commit, Tag
+
 
 class Store(object):
 
@@ -25,6 +27,9 @@ class Store(object):
         repo = MemoryRepo.init_bare([], {})
         _create_initial_commit(repo)
         return cls(repo)
+
+    def open_head(self, head_name):
+        return Head(self, head_name)
 
 
 def _create_initial_commit(repo, author="system"):

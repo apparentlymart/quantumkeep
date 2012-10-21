@@ -2,6 +2,7 @@
 from dulwich.objects import Commit as GitCommit, Tag as GitTag
 from quantumkeep.gitdict import GitDict
 from quantumkeep.schema import Schema
+from quantumkeep.exc import NotFastForward, Conflict
 
 
 class Commit(object):
@@ -33,16 +34,50 @@ class Head(object):
 
     def open_data_transaction(self):
         full_dict = self._make_latest_commit_gitdict()
-        data_dict = full_dict["data"]
 
-        return DataTransaction(self.latest_commit_id, self.schema, data_dict)
+        return DataTransaction(self.latest_commit_id, self.schema, full_dict)
 
     def commit_transaction(self, transaction, commit_message):
-        # TODO: Implement this
-        pass
+        if type(transaction) is DataTransaction:
+            new_tree_id = transaction.full_dict.write_to_repo()
+            git_commit = GitCommit()
+            git_commit.message = commit_message
+            git_commit.tree = new_tree_id
+            # FIXME: Allow caller to set this stuff
+            git_commit.author = commit.committer = "foobarbaz"
+            git_commit.author_time = commit.commit_time = 0
+            git_commit.author_timezone = commit.commit_timezone = 0
+            repo = self.store.repo
+            repo.object_store.add_object(git_commit)
+            if self.ref_name is not None:
+                success = repo.refs.set_if_equals(
+                    self.ref_name,
+                    transaction.base_commit_id,
+                    git_commit.id,
+                )
+                if not success:
+                    raise NotFastForward("Failed to update %s" % self.ref_name)
+            return Commit(self.store, git_commit)
+        else:
+            raise TypeError("Don't know how to commit a %r" % transaction)
 
     def data_transaction(self, commit_message):
         return TransactionContextManager(self, commit_message)
+
+    def _open_data_transaction_for_schema(self):
+        """
+        Open a data transaction with this head's schema as the data
+        and the metaschema as the schema. This is an implementation
+        detail of the schema transaction mechanism.
+        """
+        from quantumkeep.metaschema import meta_schema
+        full_dict = self._make_latest_commit_gitdict()
+        return DataTransaction(
+            self.latest_commit_id,
+            meta_schema,
+            full_dict,
+            data_key="schema",
+        )
 
     def _make_latest_commit_gitdict(self):
         git_commit = self.store.repo[self.latest_commit_id]
@@ -63,10 +98,11 @@ class Tag(object):
 
 class DataTransaction(object):
 
-    def __init__(self, base_commit_id, schema, data_dict):
+    def __init__(self, base_commit_id, schema, full_dict, data_key="data"):
         self.base_commit_id = base_commit_id
         self.schema = schema
-        self.data_dict = data_dict
+        self.full_dict = full_dict
+        self.data_dict = full_dict[data_key]
         self._open_containers = {}
 
     def __getitem__(self, key):

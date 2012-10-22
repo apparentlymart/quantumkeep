@@ -16,6 +16,7 @@ from dulwich.objects import (
 __all__ = ("serialize_value", "deserialize_tree_entry", "TreeEntry")
 _serializers = None
 _primitive = None
+_blob = None
 
 TREE_MODE = 0o40000
 PACK_BLOB_MODE = 0o100644
@@ -24,8 +25,10 @@ RAW_BLOB_MODE = 0o100755
 
 def _initialize():
     global _primitive
+    global _blob
     global _serializers
     _primitive = Primitive()
+    _blob = Blob()
 
     _serializers = {
         int: _primitive,
@@ -36,6 +39,7 @@ def _initialize():
         list: _primitive,
         dict: _primitive,
         type(None): _primitive,
+        str: _blob,
     }
 
 
@@ -51,8 +55,11 @@ def serialize_value(value, git_store):
 
 
 def deserialize_tree_entry(tree_entry, git_store):
-    if tree_entry.mode == PACK_BLOB_MODE:
+    mode = tree_entry.mode
+    if mode == PACK_BLOB_MODE:
         return _primitive.deserialize(tree_entry, git_store)
+    elif mode == RAW_BLOB_MODE:
+        return _blob.deserialize(tree_entry, git_store)
     else:
         raise ValueEror("Don't know how to deserialize this item")
 
@@ -83,6 +90,21 @@ class Base(object):
     @abc.abstractmethod
     def deserialize(self, tree_entry, git_store):
         pass
+
+
+class Blob(Base):
+
+    def serialize(self, value, git_store):
+        git_blob = GitBlob.from_string(value)
+        git_store.add_object(git_blob)
+        return TreeEntry(
+            mode=RAW_BLOB_MODE,
+            sha=git_blob.id,
+        )
+
+    def deserialize(self, tree_entry, git_store):
+        blob = git_store[tree_entry.sha]
+        return blob.as_raw_string()
 
 
 class Primitive(Base):

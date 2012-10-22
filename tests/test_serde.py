@@ -108,3 +108,20 @@ class TestSerDe(unittest2.TestCase):
             {u"\u270d":[u"\u270d"]},
             "1c24f60df7a2f4295d0ddc92365da2dca34a8df9",
         )
+
+    def test_blob_serde(self):
+        test_serialize = functools.partial(
+            self.assert_serialize_result,
+            expected_mode=0o100755,
+        )
+
+        test_serialize('abc123', '49fbc054731540fa68b565e398d3574fde7366e9')
+        test_serialize('', 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391')
+        test_serialize(
+            '\xF0\x9D\x84\x9E', # valid utf8
+            '632101dafbd67f673d01df8b069388c2e1301414',
+        )
+        test_serialize(
+            '\x47\x49\x46\x38\x39\x61\x01\xfe\x01', # not utf8 at all
+            '99ff76f380bb9d8bd7281d43d8040d275ee64e9b',
+        )

@@ -12,6 +12,8 @@ from dulwich.objects import (
     TreeEntry as GitTreeEntry
 )
 
+from quantumkeep.tree import Tree, TreeEntry, tree_entry_modes
+
 
 __all__ = ("serialize_value", "deserialize_tree_entry", "TreeEntry")
 _serializers = None
@@ -56,28 +58,12 @@ def serialize_value(value, git_store):
 
 def deserialize_tree_entry(tree_entry, git_store):
     mode = tree_entry.mode
-    if mode == PACK_BLOB_MODE:
+    if mode == tree_entry_modes.pack_blob:
         return _primitive.deserialize(tree_entry, git_store)
-    elif mode == RAW_BLOB_MODE:
+    elif mode == tree_entry_modes.raw_blob:
         return _blob.deserialize(tree_entry, git_store)
     else:
         raise ValueEror("Don't know how to deserialize this item")
-
-
-class TreeEntry(object):
-    mode = None
-    sha = None
-
-    def __init__(self, mode, sha):
-        self.mode = mode
-        self.sha = sha
-
-    def as_git_tree_entry(self, name):
-        return GitTreeEntry(
-            sha=self.sha,
-            mode=self.mode,
-            path=name,
-        )
 
 
 class Base(object):
@@ -98,7 +84,7 @@ class Blob(Base):
         git_blob = GitBlob.from_string(value)
         git_store.add_object(git_blob)
         return TreeEntry(
-            mode=RAW_BLOB_MODE,
+            mode=tree_entry_modes.raw_blob,
             sha=git_blob.id,
         )
 
@@ -114,7 +100,7 @@ class Primitive(Base):
         git_blob = GitBlob.from_string(content)
         git_store.add_object(git_blob)
         return TreeEntry(
-            mode=PACK_BLOB_MODE,
+            mode=tree_entry_modes.pack_blob,
             sha=git_blob.id,
         )
 

@@ -9,9 +9,10 @@ from quantumkeep.serde import (
 import dulwich.object_store
 import dulwich.objects
 import logging
+import functools
 
 
-PACK_BLOB_MODE = 0o100644
+DEFAULT = object()
 
 
 class TestSerDe(unittest2.TestCase):
@@ -19,23 +20,32 @@ class TestSerDe(unittest2.TestCase):
     def setUp(self):
         self.git_store = dulwich.object_store.MemoryObjectStore()
 
+    def assert_serialize_result(self, value, expected_sha, expected_mode=None,
+                                expected_value=DEFAULT):
+        tree_entry = serialize_value(value, self.git_store)
+
+        self.assertEqual(type(tree_entry), TreeEntry)
+
+        blob = self.git_store[tree_entry.sha]
+        self.assertEqual(type(blob), dulwich.objects.Blob)
+
+        self.assertEqual(
+            (tree_entry.mode, tree_entry.sha),
+            (expected_mode, expected_sha),
+        )
+
+        if expected_value == DEFAULT:
+            expected_value = value
+
+        got_value = deserialize_tree_entry(tree_entry, self.git_store)
+        self.assertEqual(got_value, expected_value)
+        self.assertEqual(type(got_value), type(expected_value))
+
     def test_primitive_serde(self):
-        def test_serialize(value, expected_sha):
-            tree_entry = serialize_value(value, self.git_store)
-
-            self.assertEqual(type(tree_entry), TreeEntry)
-
-            blob = self.git_store[tree_entry.sha]
-            self.assertEqual(type(blob), dulwich.objects.Blob)
-
-            self.assertEqual(
-                (tree_entry.mode, tree_entry.sha),
-                (PACK_BLOB_MODE, expected_sha),
-            )
-
-            got_value = deserialize_tree_entry(tree_entry, self.git_store)
-            self.assertEqual(got_value, value)
-            self.assertEqual(type(got_value), type(value))
+        test_serialize = functools.partial(
+            self.assert_serialize_result,
+            expected_mode=0o100644,
+        )
 
         test_serialize(1, "6b2aaa7640726588bcd3d57e1de4b1315b7f315e")
         test_serialize(129, "7f2a378569147197e2a0deabe46094f97b122486")
